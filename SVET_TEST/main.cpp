@@ -156,8 +156,8 @@ main()
 	pinMode(IMP, OUTPUT);
 	pinMode(BTN, INPUT);
 	digitalWrite(BTN, HIGH);
-	PWM_generation();
-	ADC_init();
+	//PWM_generation();
+	//ADC_init();
 	uint8_t brt = 0,stage = 0;
 	int8_t dir = 1;
 	bool btn_status = false, btn_press = false;
@@ -172,6 +172,7 @@ main()
 	//uint8_t prev_g = 0, prev_r = 0, prev_b = 0, min_brt = 0;
 	int timebase = 0;
 	_delay_ms(10);
+	send_GRB(255,255,255);
 	while (1)
 	{
 		//if (get_button_status() && timebase == 0){
