@@ -18,18 +18,18 @@
 #define IMP pinA7
 #define BTN pinA3
 
-
+uint8_t base_ADC_level = 0;
 //static bool b_BTN = true;
 
 void set_H_and_delay()	{
-	PORTB = 0b00000100;
+	PORTB |= 0b00000100;
 	_delay_us(1);
-	PORTB = 0b00000000;
+	PORTB &= 0b11111011;
 }
 
 void set_L_and_delay()	{
-	PORTB = 0b00000100;
-	PORTB = 0b00000000;
+	PORTB |= 0b00000100;
+	PORTB &= 0b11111011;
 	_delay_us(1);
 }
 
@@ -40,12 +40,6 @@ void PWM_generation() {
 	OCR0B=127; //PWM duty
 }
 
-void ADC_init(){ //ADC on A2
-	ADMUX = 0b00000010; //check the reference voltage or the VCC ???????????????????????????
-	ADCSRA = 0b10000111; //CLK/128 (~60kHz)
-	ADCSRB = 0b00010000; // left-shift ADCH for 8-bit value
-	//while (ADCSRA & (1 << ADSC) );
-}
 
 void EEPROM_write(uint8_t data, uint8_t address/*, something else? */) {
 	/* Wait for completion of previous write */
@@ -132,23 +126,63 @@ void send_byte(unsigned char b) {
 }
 
 void send_GRB(uint8_t g, uint8_t r, uint8_t b){
-	for (uint8_t i = 0; i < 10; i++){
+	for (uint8_t i = 0; i < 144; i++){
 		send_byte (g);
 		send_byte (r);
 		send_byte (b);
 	}
 }
 
+
+
+void ADC_init(){ //ADC on A2
+	short current_ADC_level = 0;
+	uint8_t adc_lvl = 0;
+	ADMUX = 0b00000010; //check the reference voltage or the VCC ???????????????????????????
+	ADCSRA = 0b10000001; //CLK/128 (~?kHz)
+	ADCSRB = 0b00010000; // left-shift ADCH for 8-bit value
+	for (uint8_t i = 0; i < 100; i++)
+	{
+		ADCSRA |= (1 << ADSC);
+		while (ADCSRA & (1 << ADSC) );
+		adc_lvl = ADCH;
+		if (adc_lvl <= 0)
+		{
+			send_GRB(255,0,0);
+			_delay_ms(100);
+			send_GRB(255,255,0);
+			_delay_ms(100);
+		}
+		else {
+			send_GRB(0,255,0);
+			_delay_ms(100);
+			send_GRB(0,255,255);
+			_delay_ms(100);
+		}
+		current_ADC_level += adc_lvl;
+		ADCSRA |= (0 << ADSC);
+		while (ADCSRA & (0 << ADSC) );
+	}
+	current_ADC_level = current_ADC_level / 100;
+	//current_ADC_level = current_ADC_level * 99;
+	//current_ADC_level = current_ADC_level / 100;
+	::base_ADC_level = current_ADC_level;
+
+}
+
 bool get_button_status(){
 	ADCSRA |= (1 << ADSC);
 	while (ADCSRA & (1 << ADSC) );
-	if(ADCH <= 150){
+	if(ADCH <= ::base_ADC_level){
 		return true;
 	}
 	else{
 		return false;
 	}
+	ADCSRA |= (0 << ADSC);
+	while (ADCSRA & (0 << ADSC) );
 }
+
 
 main()
 {
@@ -156,8 +190,8 @@ main()
 	pinMode(IMP, OUTPUT);
 	pinMode(BTN, INPUT);
 	digitalWrite(BTN, HIGH);
-	//PWM_generation();
-	//ADC_init();
+	ADC_init();
+	PWM_generation();
 	uint8_t brt = 0,stage = 0;
 	int8_t dir = 1;
 	bool btn_status = false, btn_press = false;
@@ -189,23 +223,23 @@ main()
 		//}
 		
 		
-		if (get_button_status() && btn_press == false)	{
-			_delay_ms(500);
-			if (!get_button_status()){
-				if(btn_status == false){
-					send_GRB(cur_g,cur_r,cur_b);
-					_delay_ms(100);
-					btn_press = true;
-					} else {
-					send_GRB(0,0,0);
-					//EEPROM_write(cur_g, 0);
-					//EEPROM_write(cur_r, 1);
-					//EEPROM_write(cur_b, 2);
-					_delay_ms(100);
-				}
-				btn_status = !btn_status;
-			}
+		/*if (get_button_status() && btn_press == false)	{
+		_delay_ms(500);
+		if (!get_button_status()){
+		if(btn_status == false){
+		send_GRB(cur_g,cur_r,cur_b);
+		_delay_ms(100);
+		btn_press = true;
+		} else {
+		send_GRB(0,0,0);
+		//EEPROM_write(cur_g, 0);
+		//EEPROM_write(cur_r, 1);
+		//EEPROM_write(cur_b, 2);
+		_delay_ms(100);
 		}
+		btn_status = !btn_status;
+		}
+		}*/
 		if (get_button_status())	{
 			timebase++;
 			//digitalWrite(IMP, HIGH);
@@ -219,9 +253,11 @@ main()
 			}
 
 			// time the animation
-			if (timebase > 200) {
+			if (timebase > 509) {
 				timebase = 0;
 				stage += 1;
+				brt = 0;
+				dir = 1;
 				if (stage >= 8) {
 					stage = 0;
 				}
@@ -388,6 +424,6 @@ main()
 		//digitalWrite(IMP, LOW);
 		//_delay_us(1);
 		
-		_delay_ms(3);
+		_delay_ms(2);
 	}
 }
