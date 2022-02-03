@@ -5,7 +5,7 @@
 * Author : Pumpkin
 */
 
-#define F_CPU 8000000UL
+#define F_CPU 20000000UL
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -136,51 +136,37 @@ void send_GRB(uint8_t g, uint8_t r, uint8_t b){
 
 
 void ADC_init(){ //ADC on A2
-	short current_ADC_level = 0;
+	uint16_t current_ADC_level = 0;
+
 	uint8_t adc_lvl = 0;
 	ADMUX = 0b00000010; //check the reference voltage or the VCC ???????????????????????????
-	ADCSRA = 0b10000001; //CLK/128 (~?kHz)
+	ADCSRA = 0b10000111; //CLK/128 (~?kHz)
 	ADCSRB = 0b00010000; // left-shift ADCH for 8-bit value
+	ADCSRA |= (1 << ADSC);
+
 	for (uint8_t i = 0; i < 100; i++)
 	{
-		ADCSRA |= (1 << ADSC);
 		while (ADCSRA & (1 << ADSC) );
 		adc_lvl = ADCH;
-		if (adc_lvl <= 0)
-		{
-			send_GRB(255,0,0);
-			_delay_ms(100);
-			send_GRB(255,255,0);
-			_delay_ms(100);
-		}
-		else {
-			send_GRB(0,255,0);
-			_delay_ms(100);
-			send_GRB(0,255,255);
-			_delay_ms(100);
-		}
 		current_ADC_level += adc_lvl;
-		ADCSRA |= (0 << ADSC);
-		while (ADCSRA & (0 << ADSC) );
 	}
-	current_ADC_level = current_ADC_level / 100;
-	//current_ADC_level = current_ADC_level * 99;
-	//current_ADC_level = current_ADC_level / 100;
-	::base_ADC_level = current_ADC_level;
+	
+	current_ADC_level = current_ADC_level / 100u;
+	current_ADC_level = current_ADC_level * 8u;
+	current_ADC_level = current_ADC_level / 10u;
+	::base_ADC_level = (uint8_t)(current_ADC_level);
 
 }
 
 bool get_button_status(){
 	ADCSRA |= (1 << ADSC);
 	while (ADCSRA & (1 << ADSC) );
-	if(ADCH <= ::base_ADC_level){
+	if(ADCH <= base_ADC_level){
 		return true;
 	}
 	else{
 		return false;
 	}
-	ADCSRA |= (0 << ADSC);
-	while (ADCSRA & (0 << ADSC) );
 }
 
 
@@ -192,238 +178,122 @@ main()
 	digitalWrite(BTN, HIGH);
 	ADC_init();
 	PWM_generation();
-	uint8_t brt = 0,stage = 0;
+	uint8_t brt = 0,stage = 0, cur_g = 0, cur_r = 0, cur_b = 0;
 	int8_t dir = 1;
 	bool btn_status = false, btn_press = false;
-	
-	//uint8_t n_of_diodes = 10;
-	
+
 	//uint8_t cur_g = EEPROM_read(0);
 	//uint8_t cur_r = EEPROM_read(1);
 	//uint8_t cur_b = EEPROM_read(2);
-	
-	uint8_t cur_g = 0, cur_r = 0, cur_b = 0;
-	//uint8_t prev_g = 0, prev_r = 0, prev_b = 0, min_brt = 0;
+	//uint8_t stage = EEPROM_read(3);
+	//uint8_t brt = EEPROM_read(4);
+
 	int timebase = 0;
 	_delay_ms(10);
 	send_GRB(255,255,255);
 	while (1)
 	{
-		//if (get_button_status() && timebase == 0){
-		//if (!get_button_status()){
-		//if(btn_status == 0){
-		//send_GRB(cur_g,cur_r,cur_b);
-		//}
-		//else {
-		//send_GRB(0,0,0);
-		//}
-		//btn_status = !btn_status;
-		//_delay_ms(10);
-		//}
-		//}
 		
-		
-		/*if (get_button_status() && btn_press == false)	{
-		_delay_ms(500);
-		if (!get_button_status()){
-		if(btn_status == false){
-		send_GRB(cur_g,cur_r,cur_b);
-		_delay_ms(100);
-		btn_press = true;
-		} else {
-		send_GRB(0,0,0);
-		//EEPROM_write(cur_g, 0);
-		//EEPROM_write(cur_r, 1);
-		//EEPROM_write(cur_b, 2);
-		_delay_ms(100);
-		}
-		btn_status = !btn_status;
-		}
-		}*/
 		if (get_button_status())	{
+			
 			timebase++;
 			//digitalWrite(IMP, HIGH);
-
-			brt += dir;
-			if (brt >= 255) {
-				dir = -1;
-			}
-			else if (brt == 0) {
-				dir = 1;
-			}
-
-			// time the animation
-			if (timebase > 509) {
-				timebase = 0;
-				stage += 1;
-				brt = 0;
-				dir = 1;
-				if (stage >= 8) {
-					stage = 0;
+			if (timebase >= 50 && timebase < 1000 && btn_press == false){
+				
+				if (btn_status == false){
+					
+					send_GRB(cur_g, cur_r, cur_b);
+					btn_status = !btn_status;
+					btn_press = true;
+					_delay_ms(100);
+				}
+				else {
+					send_GRB(0,0,0);
+					EEPROM_write(cur_g, 0);
+					EEPROM_write(cur_r, 1);
+					EEPROM_write(cur_b, 2);
+					EEPROM_write(stage, 3);
+					EEPROM_write(brt, 4);
+					btn_status = !btn_status;
+					btn_press = true;
+					_delay_ms(100);
 				}
 			}
-			if (stage == 0) {
-				send_GRB(0,brt,0);
-				cur_g = 0;
-				cur_r = brt;
-				cur_b = 0;
-				} else if (stage == 1) {
-				send_GRB(brt / 2,brt,0);
-				cur_g = brt / 2;
-				cur_r = brt;
-				cur_b = 0;
-				} else if (stage == 2) {
-				send_GRB(brt,brt,0);
-				cur_g = brt;
-				cur_r = brt;
-				cur_b = 0;
-				} else if (stage == 3) {
-				send_GRB(brt,0,0);
-				cur_g = brt;
-				cur_r = 0;
-				cur_b = 0;
-				} else if (stage == 4) {
-				send_GRB(brt,0, brt);
-				cur_g = brt;
-				cur_r = 0;
-				cur_b = brt;
-				} else if (stage == 5) {
-				send_GRB(0, 0, brt);
-				cur_g = 0;
-				cur_r = 0;
-				cur_b = brt;
-				} else if (stage == 6) {
-				send_GRB(0, brt / 2, brt);
-				cur_g = 0;
-				cur_r = brt / 2;
-				cur_b = brt;
-				} else if (stage == 7) {
-				send_GRB(brt, brt, brt);
-				cur_g = brt;
-				cur_r = brt;
-				cur_b = brt;
+			else if (timebase >= 1000)
+			{
+				
+				
+				brt += dir;
+				if (brt >= 255) {
+					
+					dir = -1;
+				}
+				else if (brt == 0) {
+					
+					dir = 1;
+				}
+
+				// time the animation
+				if (timebase > 1509) {
+					
+					timebase = 1000;
+					stage += 1;
+					brt = 0;
+					dir = 1;
+					if (stage >= 8) {
+						stage = 0;
+					}
+				}
+				//send_GRB(0,0,255-ADCH);
+
+				if (stage == 0) {
+					send_GRB(0,brt,0);
+					cur_g = 0;
+					cur_r = brt;
+					cur_b = 0;
+					} else if (stage == 1) {
+					send_GRB(brt / 2,brt,0);
+					cur_g = brt / 2;
+					cur_r = brt;
+					cur_b = 0;
+					} else if (stage == 2) {
+					send_GRB(brt,brt,0);
+					cur_g = brt;
+					cur_r = brt;
+					cur_b = 0;
+					} else if (stage == 3) {
+					send_GRB(brt,0,0);
+					cur_g = brt;
+					cur_r = 0;
+					cur_b = 0;
+					} else if (stage == 4) {
+					send_GRB(brt,0, brt);
+					cur_g = brt;
+					cur_r = 0;
+					cur_b = brt;
+					} else if (stage == 5) {
+					send_GRB(0, 0, brt);
+					cur_g = 0;
+					cur_r = 0;
+					cur_b = brt;
+					} else if (stage == 6) {
+					send_GRB(0, brt / 2, brt);
+					cur_g = 0;
+					cur_r = brt / 2;
+					cur_b = brt;
+					} else if (stage == 7) {
+					send_GRB(brt, brt, brt);
+					cur_g = brt;
+					cur_r = brt;
+					cur_b = brt;
+				}
 			}
 		}
 		else {
+			btn_status = false;
 			btn_press = false;
+			timebase = 0;
 		}
-		
-		//if (timebase >= 100 && timebase < 116) {
-		//
-		//if (!get_button_status()){
-		//timebase = 0;
-		//break;
-		//}
-		//brt += dir;
-		//if (brt >= 7){
-		//dir = -1;
-		//}
-		//else if (brt == 0){
-		//dir = 1;
-		//}
-		//if (dir == -1){
-		//cur_g = cur_g / 2;
-		//cur_r = cur_r / 2;
-		//cur_b = cur_b / 2;
-		//}
-		//else {
-		//cur_g = cur_g * 2;
-		//cur_r = cur_r * 2;
-		//cur_b = cur_b * 2;
-		//}
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(100);
-		//}
-		//else if (timebase >= 116 && timebase < 117)
-		//{
-		//brt = 6;
-		//min_brt = 0;
-		//for (int j = 0; j < 1536; j++){
-		//if (!get_button_status()){
-		//timebase = 0;
-		//break;
-		//}
-		//
-		//if(j < 256){
-		//cur_g = 255;
-		//cur_r = j;
-		//cur_b = 0;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//}
-		//
-		//if(j < 512){
-		//cur_g = 512-j;
-		//cur_r = 255;
-		//cur_b = 0;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//}
-		//if(j < 768){
-		//cur_g = 0;
-		//cur_r = 255;
-		//cur_b = j-512;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//}
-		//if(j < 1024){
-		//cur_g = 0;
-		//cur_r = 1024-j;
-		//cur_b = 255;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//
-		//}
-		//if(j < 1280){
-		//cur_g = j-1024;
-		//cur_r = 0;
-		//cur_b = 255;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//}
-		//if (j < 1536){
-		//cur_g = 255;
-		//cur_r = 0;
-		//cur_b = 1536-j;
-		//send_GRB(cur_g, cur_r, cur_b);
-		//_delay_ms(1);
-		//continue;
-		//}
-		//break;
-		//}
-		//}
-		//else if (timebase >= 117){
-		//timebase = 100;
-		//min_brt = 0;
-		//brt = 6;
-		//cur_g = 255;
-		//cur_r = 255;
-		//cur_b = 255;
-		//}
-		//}
-		//else {
-		//
-		////digitalWrite(IMP, LOW);
-		//timebase = 0;
-		//}
-
-
-		//digitalWrite(IMP, HIGH);
-
-		//digitalWrite(IMP, LOW);
-		//_delay_ms(100);
-		
-
-		//digitalWrite(IMP, HIGH);
-		//_delay_us(1);
-		//digitalWrite(IMP, LOW);
-		//_delay_us(1);
-		
 		_delay_ms(2);
 	}
 }
