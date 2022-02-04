@@ -290,7 +290,7 @@ main()
 			}
 		}
 		else {
-			btn_status = false;
+			//btn_status = false;
 			btn_press = false;
 			timebase = 0;
 		}
