@@ -17,6 +17,7 @@
 #define DIN pinB2
 #define IMP pinA7
 #define BTN pinA3
+#define ADC_1 pinA5
 
 uint8_t base_ADC_level = 0;
 //static bool b_BTN = true;
@@ -33,12 +34,14 @@ void set_L_and_delay()	{
 	_delay_us(1);
 }
 
-void PWM_generation() {
+void PWM_generation() {	   //8-bit
 	TCCR0A = 0b00100011; //COM0B1 = 0, COM0B0 = 1; WGM01 = 0, WGM00 = 1; (phase-corrent PWM on A7)
 	TCCR0B = 0b00000001; // CLK (need more info on frequency)
 	TCNT0=0; //counter starting value
 	OCR0B=127; //PWM duty
 }
+
+
 
 
 void EEPROM_write(uint8_t data, uint8_t address/*, something else? */) {
@@ -148,20 +151,30 @@ void ADC_init(){ //ADC on A2
 	{
 		while (ADCSRA & (1 << ADSC) );
 		adc_lvl = ADCH;
-		current_ADC_level += adc_lvl;
+		current_ADC_level += (uint16_t)(adc_lvl);
 	}
 	
 	current_ADC_level = current_ADC_level / 100u;
-	current_ADC_level = current_ADC_level * 8u;
-	current_ADC_level = current_ADC_level / 10u;
+	current_ADC_level = current_ADC_level * 95u;
+	current_ADC_level = current_ADC_level / 100u;
 	::base_ADC_level = (uint8_t)(current_ADC_level);
+	//::base_ADC_level = 215;
+}
 
+void PWM_generation_16() {	   //16-bit
+	TCCR1A = 0b00100001; //COM0B1 = 0, COM0B0 = 1; WGM01 = 0, WGM00 = 1; (phase-corrent PWM on A7)
+	TCCR1B = 0b00000001; // CLK (need more info on frequency)
+	//TCCR1C = 0b01000000; // CLK (need more info on frequency)
+	TCNT1H=0; //counter starting value
+	TCNT1L=0; //counter starting value
+	OCR1BH=ADCH; //PWM duty
+	OCR1BL=ADCH; //PWM duty
 }
 
 bool get_button_status(){
 	ADCSRA |= (1 << ADSC);
 	while (ADCSRA & (1 << ADSC) );
-	if(ADCH <= base_ADC_level){
+	if(ADCH <= 202){
 		return true;
 	}
 	else{
@@ -174,10 +187,12 @@ main()
 {
 	pinMode(DIN, OUTPUT);
 	pinMode(IMP, OUTPUT);
+	pinMode(ADC_1, OUTPUT);
 	pinMode(BTN, INPUT);
 	digitalWrite(BTN, HIGH);
 	ADC_init();
 	PWM_generation();
+
 	uint8_t brt = 0,stage = 0, cur_g = 0, cur_r = 0, cur_b = 0;
 	int8_t dir = 1;
 	bool btn_status = false, btn_press = false;
@@ -192,7 +207,7 @@ main()
 	_delay_ms(10);
 	send_GRB(255,255,255);
 	while (1)
-	{
+	{		PWM_generation_16();
 		
 		if (get_button_status())	{
 			
@@ -209,11 +224,11 @@ main()
 				}
 				else {
 					send_GRB(0,0,0);
-					EEPROM_write(cur_g, 0);
-					EEPROM_write(cur_r, 1);
-					EEPROM_write(cur_b, 2);
-					EEPROM_write(stage, 3);
-					EEPROM_write(brt, 4);
+					//EEPROM_write(cur_g, 0);
+					//EEPROM_write(cur_r, 1);
+					//EEPROM_write(cur_b, 2);
+					//EEPROM_write(stage, 3);
+					//EEPROM_write(brt, 4);
 					btn_status = !btn_status;
 					btn_press = true;
 					_delay_ms(100);
@@ -294,6 +309,6 @@ main()
 			btn_press = false;
 			timebase = 0;
 		}
-		_delay_ms(2);
+		_delay_ms(1);
 	}
 }
