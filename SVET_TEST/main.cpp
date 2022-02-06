@@ -154,7 +154,7 @@ void base_ADC_measure(){ //set the average adc level for fair measurement
 		adc_lvl = ADCH;
 		current_ADC_level += (uint16_t)(adc_lvl);
 	}
-	current_ADC_level = current_ADC_level / 100u; //find the average value of base 
+	current_ADC_level = current_ADC_level / 100u; //find the average value of base
 	current_ADC_level = current_ADC_level * 95u; //set the base to 95% of the average
 	current_ADC_level = current_ADC_level / 100u;
 	::base_ADC_level = (uint8_t)(current_ADC_level);
@@ -203,9 +203,9 @@ main()
 	uint8_t cur_b = EEPROM_read(2);
 	uint8_t stage = EEPROM_read(3);
 	uint8_t brt = EEPROM_read(4);
-
-	int timebase = 0, cur_stage_time = 0, last_stage_time = 0;
-
+	uint16_t last_stage_time = EEPROM_read(5);
+	uint16_t cur_stage_time = EEPROM_read(6);
+	uint16_t timebase = 0;
 	while (1)
 	{
 
@@ -214,9 +214,9 @@ main()
 			
 			timebase++;
 
-			if (timebase >= 50 && timebase < 1000 && btn_press == false){ //turning on the lights
+			if (timebase >= 50 && timebase < 1000 && btn_press == false){ //turning on or off the lights
 				
-				if (btn_status == false){
+				if (btn_status == false){//turning on the lights
 					
 					send_GRB(cur_g, cur_r, cur_b);
 					btn_status = !btn_status;
@@ -231,6 +231,8 @@ main()
 					EEPROM_write(cur_b, 2);
 					EEPROM_write(stage, 3);
 					EEPROM_write(brt, 4);
+					EEPROM_write(last_stage_time, 5);
+					EEPROM_write(cur_stage_time, 6);
 					btn_status = !btn_status;
 					btn_press = true;
 					turn_off = true;
@@ -240,8 +242,8 @@ main()
 			else if (timebase >= 1000 && turn_off == false) //start the color changing procedure
 			{
 				if (last_stage_time != 0){
-				timebase += last_stage_time;
-				last_stage_time = 0;
+					timebase += last_stage_time;
+					last_stage_time = 0;
 				}
 				
 				brt += dir;
