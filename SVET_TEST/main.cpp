@@ -139,26 +139,46 @@ void send_GRB(uint8_t g, uint8_t r, uint8_t b){
 
 
 void ADC_init(){ //ADC on A2
-	uint16_t current_ADC_level = 0;
-
-	uint8_t adc_lvl = 0;
 	ADMUX = 0b00000010; //check the reference voltage or the VCC ???????????????????????????
 	ADCSRA = 0b10000111; //CLK/128 (~?kHz)
 	ADCSRB = 0b00010000; // left-shift ADCH for 8-bit value
-	ADCSRA |= (1 << ADSC);
+}
 
+void base_ADC_measure(){
+	
+	uint16_t current_ADC_level = 0;
+	uint8_t adc_lvl = 0;
+	//uint8_t base_ADC_level = 0;
+	//ADCSRA |= (1 << ADSC);
 	for (uint8_t i = 0; i < 100; i++)
 	{
+		ADCSRA |= (1 << ADSC);
 		while (ADCSRA & (1 << ADSC) );
 		adc_lvl = ADCH;
+		//_delay_ms(100);
+		//current_ADC_level += (uint16_t)(adc_lvl);
+		//if (adc_lvl >= 200){
+		//send_GRB(255,0,0);
+		//_delay_ms(10);
+		//send_GRB(255,255,0);
+		//_delay_ms(10);
+		//}
+		//else {
+		//send_GRB(0,0,0);
+		//_delay_ms(10);
+		//send_GRB(255,255,255);
+		//_delay_ms(10);
+		//}
+
 		current_ADC_level += (uint16_t)(adc_lvl);
 	}
-	
 	current_ADC_level = current_ADC_level / 100u;
 	current_ADC_level = current_ADC_level * 95u;
 	current_ADC_level = current_ADC_level / 100u;
 	::base_ADC_level = (uint8_t)(current_ADC_level);
-	//::base_ADC_level = 215;
+	//::base_ADC_level = 202;
+
+	//return base_ADC_level;
 }
 
 void PWM_generation_16() {	   //16-bit
@@ -174,7 +194,7 @@ void PWM_generation_16() {	   //16-bit
 bool get_button_status(){
 	ADCSRA |= (1 << ADSC);
 	while (ADCSRA & (1 << ADSC) );
-	if(ADCH <= 202){
+	if(ADCH <= ::base_ADC_level){
 		return true;
 	}
 	else{
@@ -187,27 +207,31 @@ main()
 {
 	pinMode(DIN, OUTPUT);
 	pinMode(IMP, OUTPUT);
-	pinMode(ADC_1, OUTPUT);
+	//pinMode(ADC_1, OUTPUT);
 	pinMode(BTN, INPUT);
 	digitalWrite(BTN, HIGH);
 	ADC_init();
 	PWM_generation();
+	base_ADC_measure();
 
-	uint8_t brt = 0,stage = 0, cur_g = 0, cur_r = 0, cur_b = 0;
+	//uint8_t brt = 0,stage = 0, cur_g = 0, cur_r = 0, cur_b = 0;
 	int8_t dir = 1;
-	bool btn_status = false, btn_press = false;
+	bool btn_status = false, btn_press = false, turn_off = false;
 
-	//uint8_t cur_g = EEPROM_read(0);
-	//uint8_t cur_r = EEPROM_read(1);
-	//uint8_t cur_b = EEPROM_read(2);
-	//uint8_t stage = EEPROM_read(3);
-	//uint8_t brt = EEPROM_read(4);
+	uint8_t cur_g = EEPROM_read(0);
+	uint8_t cur_r = EEPROM_read(1);
+	uint8_t cur_b = EEPROM_read(2);
+	uint8_t stage = EEPROM_read(3);
+	uint8_t brt = EEPROM_read(4);
 
-	int timebase = 0;
-	_delay_ms(10);
-	send_GRB(255,255,255);
+	int timebase = 0, cur_stage_time = 0;
+	//_delay_ms(10);
+	//send_GRB(255,255,255);
+	//_delay_ms(10);
+	//send_GRB(cur_g,cur_r,cur_b);
 	while (1)
-	{		PWM_generation_16();
+	{
+		//PWM_generation_16();
 		
 		if (get_button_status())	{
 			
@@ -220,23 +244,27 @@ main()
 					send_GRB(cur_g, cur_r, cur_b);
 					btn_status = !btn_status;
 					btn_press = true;
+					turn_off = false;
 					_delay_ms(100);
 				}
 				else {
 					send_GRB(0,0,0);
-					//EEPROM_write(cur_g, 0);
-					//EEPROM_write(cur_r, 1);
-					//EEPROM_write(cur_b, 2);
-					//EEPROM_write(stage, 3);
-					//EEPROM_write(brt, 4);
+					EEPROM_write(cur_g, 0);
+					EEPROM_write(cur_r, 1);
+					EEPROM_write(cur_b, 2);
+					EEPROM_write(stage, 3);
+					EEPROM_write(brt, 4);
 					btn_status = !btn_status;
 					btn_press = true;
+					turn_off = true;
 					_delay_ms(100);
 				}
 			}
-			else if (timebase >= 1000)
+			else if (timebase >= 1000 && turn_off == false)
 			{
-				
+				//if (cur_stage_time != 0){
+				//timebase += cur_stage_time;
+				//}
 				
 				brt += dir;
 				if (brt >= 255) {
@@ -250,8 +278,9 @@ main()
 
 				// time the animation
 				if (timebase > 1509) {
-					
+					cur_stage_time=0;
 					timebase = 1000;
+
 					stage += 1;
 					brt = 0;
 					dir = 1;
@@ -266,41 +295,49 @@ main()
 					cur_g = 0;
 					cur_r = brt;
 					cur_b = 0;
+					cur_stage_time++;
 					} else if (stage == 1) {
 					send_GRB(brt / 2,brt,0);
 					cur_g = brt / 2;
 					cur_r = brt;
 					cur_b = 0;
+					cur_stage_time++;
 					} else if (stage == 2) {
 					send_GRB(brt,brt,0);
 					cur_g = brt;
 					cur_r = brt;
 					cur_b = 0;
+					cur_stage_time++;
 					} else if (stage == 3) {
 					send_GRB(brt,0,0);
 					cur_g = brt;
 					cur_r = 0;
 					cur_b = 0;
+					cur_stage_time++;
 					} else if (stage == 4) {
 					send_GRB(brt,0, brt);
 					cur_g = brt;
 					cur_r = 0;
 					cur_b = brt;
+					cur_stage_time++;
 					} else if (stage == 5) {
 					send_GRB(0, 0, brt);
 					cur_g = 0;
 					cur_r = 0;
 					cur_b = brt;
+					cur_stage_time++;
 					} else if (stage == 6) {
 					send_GRB(0, brt / 2, brt);
 					cur_g = 0;
 					cur_r = brt / 2;
 					cur_b = brt;
+					cur_stage_time++;
 					} else if (stage == 7) {
 					send_GRB(brt, brt, brt);
 					cur_g = brt;
 					cur_r = brt;
 					cur_b = brt;
+					cur_stage_time++;
 				}
 			}
 		}
